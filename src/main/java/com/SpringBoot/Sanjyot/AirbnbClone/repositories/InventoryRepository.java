@@ -185,7 +185,7 @@ public interface InventoryRepository extends JpaRepository<Inventory,Long> {
             @Param("checkOutDate") LocalDate checkOutDate
     );
 
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
         UPDATE Inventory i
         SET
@@ -197,6 +197,24 @@ public interface InventoryRepository extends JpaRepository<Inventory,Long> {
           AND i.date < :checkOutDate
     """)
     void confirmBooking(
+            @Param("hotelId") Long hotelId,
+            @Param("roomId") Long roomId,
+            @Param("checkInDate") LocalDate checkInDate,
+            @Param("checkOutDate") LocalDate checkOutDate,
+            @Param("rooms") Integer rooms
+    );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        UPDATE Inventory i
+        SET
+          i.bookedCount = i.bookedCount - :rooms
+        WHERE i.hotel.id = :hotelId
+          AND i.room.id = :roomId
+          AND i.date >= :checkInDate
+          AND i.date < :checkOutDate
+    """)
+    void cancelBooking(
             @Param("hotelId") Long hotelId,
             @Param("roomId") Long roomId,
             @Param("checkInDate") LocalDate checkInDate,

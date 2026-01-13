@@ -7,7 +7,7 @@ import com.SpringBoot.Sanjyot.AirbnbClone.entities.RoomEntity;
 import com.SpringBoot.Sanjyot.AirbnbClone.exception.ResourceNotFoundException;
 import com.SpringBoot.Sanjyot.AirbnbClone.repositories.HotelRepository;
 import com.SpringBoot.Sanjyot.AirbnbClone.repositories.RoomRepository;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;

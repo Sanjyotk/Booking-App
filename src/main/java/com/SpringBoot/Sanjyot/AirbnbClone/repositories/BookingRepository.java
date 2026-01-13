@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface BookingRepository extends JpaRepository<BookingEntity,Long> {
@@ -21,4 +22,5 @@ public interface BookingRepository extends JpaRepository<BookingEntity,Long> {
     """)
     List<BookingEntity> findExpiredReservations(@Param("expiryTime") LocalDateTime expiryTime);
 
+    Optional<BookingEntity> findByPaymentSessionId(String sessionId);
 }

@@ -7,7 +7,7 @@ import com.SpringBoot.Sanjyot.AirbnbClone.entities.*;
 import com.SpringBoot.Sanjyot.AirbnbClone.entities.enums.BookingStatus;
 import com.SpringBoot.Sanjyot.AirbnbClone.exception.ResourceNotFoundException;
 import com.SpringBoot.Sanjyot.AirbnbClone.repositories.*;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.scheduling.annotation.Scheduled;

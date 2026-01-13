@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @AllArgsConstructor
@@ -33,9 +34,21 @@ public class HotelBookingController {
         return ResponseEntity.ok(bookingService.addGuests(bookingId,guestDTOList));
     }
 
+//    @PostMapping("/{bookingId}/payment")
+//    public ResponseEntity<PaymentDTO> makePayment(@PathVariable Long bookingId){
+//        return ResponseEntity.ok(bookingService.makePayment(bookingId));
+//    }
+
     @PostMapping("/{bookingId}/payment")
-    public ResponseEntity<PaymentDTO> makePayment(@PathVariable Long bookingId){
-        return ResponseEntity.ok(bookingService.makePayment(bookingId));
+    public ResponseEntity<Map<String, String>> initiatePayment(@PathVariable Long bookingId){
+        String sessionUrl = bookingService.initiatePayment(bookingId);
+        return ResponseEntity.ok(Map.of("sessionUrl",sessionUrl));
+    }
+
+    @PostMapping("/{bookingId}/payment/cancel")
+    public ResponseEntity<Map<String, String>> cancelBooking(@PathVariable Long bookingId){
+        String status = bookingService.cancelBooking(bookingId);
+        return ResponseEntity.ok(Map.of("status",status));
     }
 
 }

@@ -74,4 +74,10 @@ public class BookingEntity {
 
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal pricePerNight; // optional but very useful
+
+    @Column(unique = true)
+    private String paymentSessionId;
+
+    @Column(unique = true)
+    private String paymentIntentId;
 }

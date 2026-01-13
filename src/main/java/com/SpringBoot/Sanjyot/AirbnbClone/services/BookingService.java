@@ -8,10 +8,16 @@ import com.SpringBoot.Sanjyot.AirbnbClone.entities.enums.BookingStatus;
 import com.SpringBoot.Sanjyot.AirbnbClone.entities.enums.PaymentStatus;
 import com.SpringBoot.Sanjyot.AirbnbClone.exception.ResourceNotFoundException;
 import com.SpringBoot.Sanjyot.AirbnbClone.repositories.*;
-import com.SpringBoot.Sanjyot.AirbnbClone.security.JWTService;
 import com.SpringBoot.Sanjyot.AirbnbClone.strategy.PricingService;
-import jakarta.transaction.Transactional;
+import com.stripe.exception.StripeException;
+import com.stripe.model.Event;
+import com.stripe.model.Refund;
+import com.stripe.model.checkout.Session;
+import com.stripe.param.RefundCancelParams;
+import com.stripe.param.RefundCreateParams;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -19,12 +25,14 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class BookingService {
 
     private final BookingRepository bookingRepository;
@@ -36,7 +44,7 @@ public class BookingService {
     private final GuestRepository guestRepository;
     private final PricingService pricingService;
     private final PaymentRepository paymentRepository;
-    private final JWTService jwtService;
+    private final CheckoutService checkoutService;
 
     @Transactional
     public BookingDTO initialiseBooking(BookingRequest bookingRequest) {
@@ -90,8 +98,7 @@ public class BookingService {
                 bookingRequest.getRoomsRequest()
         );
 
-        //temp
-        UserEntity user = userRepository.findById(1L).orElseThrow(()->new ResourceNotFoundException("user not found"));
+        UserEntity user = (UserEntity) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
 
         BookingEntity booking = BookingEntity.builder()
                 .hotel(hotel)
@@ -115,9 +122,10 @@ public class BookingService {
         BookingEntity booking = bookingRepository.findById(bookingId).orElseThrow(()-> new ResourceNotFoundException("Booking id not found"));
         BookingStatus status = booking.getBookingStatus();
 
-        UserEntity user1 = (UserEntity) Objects.requireNonNull(SecurityContextHolder.getContext().getAuthentication()).getPrincipal();
-
-        if (!booking.getUser().equals(user1)){
+        UserEntity user1 = (UserEntity) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        System.out.println(user1);
+        System.out.println(booking.getUser());
+        if (!booking.getUser().getId().equals(user1.getId())) {
             throw new IllegalStateException("Booking id not with current user");
         }
 
@@ -192,5 +200,172 @@ public class BookingService {
 
         return modelMapper.map(payment, PaymentDTO.class);
 
+    }
+
+    @Transactional
+    public String initiatePayment(Long bookingId) {
+
+        BookingEntity booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Booking not found"));
+
+        if (booking.getBookingStatus() != BookingStatus.GUESTS_ADDED) {
+            throw new IllegalStateException("Payment not allowed in current booking state");
+        }
+
+        UserEntity user = (UserEntity) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        if (!booking.getUser().getId().equals(user.getId())) {
+            throw new IllegalStateException("Booking id not with current user");
+        }
+
+        String paymentSessionUrl = checkoutService.getCheckoutSession(booking,
+                "http://localhost:8080/payments/success",
+                "http://localhost:8080/payments/failure");
+
+        booking.setBookingStatus(BookingStatus.PAYMENT_PENDING);
+        bookingRepository.save(booking);
+
+        return paymentSessionUrl;
+
+    }
+
+    @Transactional
+    public void capturePayment(Event event) {
+//        if ("checkout.session.completed".equals(event.getType())) {
+//
+//            Session session = (Session) event.getDataObjectDeserializer().getObject().orElse(null);
+//            if (session == null) return;
+//
+//            String sessionId = session.getId();
+//            BookingEntity booking = bookingRepository.findByPaymentSessionId(sessionId).orElseThrow(() -> new ResourceNotFoundException("Booking with id not found"));
+//            booking.setBookingStatus(BookingStatus.CONFIRMED);
+//            bookingRepository.save(booking);
+//
+//            // FINALIZE INVENTORY
+//            inventoryRepository.confirmBooking(
+//                    booking.getHotel().getId(),
+//                    booking.getRoom().getId(),
+//                    booking.getCheckInDate(),
+//                    booking.getCheckOutDate(),
+//                    booking.getRoomsCount()
+//            );
+//            log.warn("Successfully confirmed the booking for Booking ID: {}", booking.getId());
+//
+//        } else {
+//            log.warn("Unhandled event type: {}", event.getType());
+//        }
+
+        log.warn("Webhook event received: {}", event.getType());
+
+        if (!"checkout.session.completed".equals(event.getType())) {
+            return;
+        }
+
+        Object dataObject = event.getData().getObject();
+
+        String bookingIdStr = null;
+        String paymentIntentId = null;
+
+        // ✅ Case 1: Stripe SDK deserialized to Session
+        if (dataObject instanceof Session session) {
+            bookingIdStr = session.getMetadata().get("bookingId");
+            paymentIntentId = session.getPaymentIntent();
+        }
+        // ✅ Case 2: Raw map (deserialization failed or partial)
+        else if (dataObject instanceof Map<?, ?> map) {
+            @SuppressWarnings("unchecked")
+            Map<String, String> metadata =
+                    (Map<String, String>) map.get("metadata");
+
+            if (metadata != null) {
+                bookingIdStr = metadata.get("bookingId");
+            }
+            paymentIntentId = (String) map.get("payment_intent");
+        }
+
+        if (bookingIdStr == null) {
+            log.error("❌ bookingId missing in checkout.session.completed event");
+            return;
+        }
+
+        Long bookingId = Long.valueOf(bookingIdStr);
+
+        BookingEntity booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Booking not found"));
+
+        // 🔐 Idempotency guard
+        if (booking.getBookingStatus() == BookingStatus.CONFIRMED) {
+            log.warn("Booking {} already confirmed, skipping", bookingId);
+            return;
+        }
+
+        booking.setPaymentIntentId(paymentIntentId);
+        // ✅ Confirm booking
+        booking.setBookingStatus(BookingStatus.CONFIRMED);
+        bookingRepository.save(booking);
+
+        // ✅ Finalize inventory
+        inventoryRepository.confirmBooking(
+                booking.getHotel().getId(),
+                booking.getRoom().getId(),
+                booking.getCheckInDate(),
+                booking.getCheckOutDate(),
+                booking.getRoomsCount()
+        );
+
+        log.warn(
+                "✅ Booking CONFIRMED. bookingId={}",
+                bookingId
+        );
+    }
+
+//    @Transactional
+    public String cancelBooking(Long bookingId) {
+
+        UserEntity user = (UserEntity) SecurityContextHolder
+                .getContext()
+                .getAuthentication()
+                .getPrincipal();
+
+        BookingEntity booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Booking not found"));
+
+        if (!booking.getUser().getId().equals(user.getId())) {
+            throw new IllegalStateException("Booking does not belong to user");
+        }
+
+        if (booking.getBookingStatus() != BookingStatus.CONFIRMED) {
+            throw new IllegalStateException("Only confirmed bookings can be cancelled");
+        }
+
+        try {
+            RefundCreateParams refundParams =
+                    RefundCreateParams.builder()
+                            .setPaymentIntent(booking.getPaymentIntentId())
+                            .build();
+
+            log.warn("STEP 1: Entered cancelBooking");
+
+            Refund.create(refundParams);
+
+            log.warn("STEP 2: Refund call succeeded");
+
+            booking.setBookingStatus(BookingStatus.CANCELLED);
+            bookingRepository.save(booking);
+
+            log.warn("STEP 3: Booking updated");
+
+            inventoryRepository.cancelBooking(
+                    booking.getHotel().getId(),
+                    booking.getRoom().getId(),
+                    booking.getCheckInDate(),
+                    booking.getCheckOutDate(),
+                    booking.getRoomsCount()
+            );
+
+            return "Refund initiated";
+
+        } catch (StripeException e) {
+            throw new RuntimeException("Refund failed", e);
+        }
     }
 }
