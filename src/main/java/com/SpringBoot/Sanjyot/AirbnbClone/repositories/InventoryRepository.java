@@ -1,11 +1,9 @@
 package com.SpringBoot.Sanjyot.AirbnbClone.repositories;
 
-import com.SpringBoot.Sanjyot.AirbnbClone.dto.HotelSearchRequestDTO;
 import com.SpringBoot.Sanjyot.AirbnbClone.dto.searchDtos.AvailableRoomRow;
 import com.SpringBoot.Sanjyot.AirbnbClone.entities.HotelEntity;
 import com.SpringBoot.Sanjyot.AirbnbClone.entities.Inventory;
 import com.SpringBoot.Sanjyot.AirbnbClone.entities.RoomEntity;
-import com.SpringBoot.Sanjyot.AirbnbClone.entities.UserEntity;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -19,6 +17,7 @@ import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 @Repository
 public interface InventoryRepository extends JpaRepository<Inventory,Long> {
@@ -221,4 +220,64 @@ public interface InventoryRepository extends JpaRepository<Inventory,Long> {
             @Param("checkOutDate") LocalDate checkOutDate,
             @Param("rooms") Integer rooms
     );
+
+    List<Inventory> findByRoomId(Long roomId);
+
+    List<Inventory> findByHotelId(Long hotelId);
+
+    @Query("""
+        SELECT i
+        FROM INVENTORY i
+        WHERE i.room.id = :roomId
+        AND i.date >= :startDate
+        AND i.date < :endDate
+    """)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    List<Inventory> selectRoomInvetoryForUpdation(Long roomId, LocalDate startDate, LocalDate endDate);
+
+    @Modifying
+    @Query("""
+        UPDATE Inventory i
+        SET
+            i.surgeFactor = :surgeFactor,
+            i.closed = :closed
+        WHERE i.room.id = :roomId
+        AND i.date >= :startDate
+        AND i.date < :endDate
+    """)
+    int updateInventoryByRoom(
+            @Param("roomId") Long roomId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            @Param("surgeFactor") BigDecimal surgeFactor,
+            @Param("closed") Boolean closed);
+
+
+    @Query("""
+        SELECT i
+        FROM INVENTORY i
+        WHERE i.hotel.id = :hotelId
+        AND i.date >= :startDate
+        AND i.date < :endDate
+    """)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    List<Inventory> selectHotelInvetoryForUpdation(Long hotelId, LocalDate startDate, LocalDate endDate);
+
+    @Modifying
+    @Query("""
+        UPDATE Inventory i
+        SET
+            i.surgeFactor = :surgeFactor,
+            i.closed = :closed
+        WHERE i.hotel.id = :hotelId
+        AND i.date >= :startDate
+        AND i.date < :endDate
+    """)
+    int updateInventoryByHotel(
+            @Param("roomId") Long hotelId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            @Param("surgeFactor") BigDecimal surgeFactor,
+            @Param("closed") Boolean closed);
+
 }

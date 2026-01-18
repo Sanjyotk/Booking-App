@@ -29,7 +29,7 @@ public class BookingExpiryScheduler {
     @Scheduled(fixedRate = 60_000) // every 1 minute
     public void expireOldReservations() {
 
-        LocalDateTime expiryTime = LocalDateTime.now().minusMinutes(60);
+        LocalDateTime expiryTime = LocalDateTime.now().minusMinutes(10);
 
         List<BookingEntity> expiredBookings =
                 bookingRepository.findExpiredReservations(expiryTime);

@@ -1,11 +1,10 @@
 package com.SpringBoot.Sanjyot.AirbnbClone.services;
 
-import com.SpringBoot.Sanjyot.AirbnbClone.dto.HotelDTO;
-import com.SpringBoot.Sanjyot.AirbnbClone.dto.HotelInfoDTO;
-import com.SpringBoot.Sanjyot.AirbnbClone.dto.RoomDTO;
+import com.SpringBoot.Sanjyot.AirbnbClone.dto.*;
 import com.SpringBoot.Sanjyot.AirbnbClone.entities.HotelEntity;
 import com.SpringBoot.Sanjyot.AirbnbClone.entities.RoomEntity;
 import com.SpringBoot.Sanjyot.AirbnbClone.entities.UserEntity;
+import com.SpringBoot.Sanjyot.AirbnbClone.entities.enums.BookingStatus;
 import com.SpringBoot.Sanjyot.AirbnbClone.exception.ResourceNotFoundException;
 import com.SpringBoot.Sanjyot.AirbnbClone.repositories.HotelRepository;
 import com.SpringBoot.Sanjyot.AirbnbClone.repositories.RoomRepository;
@@ -17,6 +16,10 @@ import org.modelmapper.ModelMapper;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import java.nio.file.AccessDeniedException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 
 @Service
@@ -27,6 +30,7 @@ public class HotelService {
     private final HotelRepository hotelRepository;
     private final InventoryService inventoryService;
     private final RoomRepository roomRepository;
+    private final BookingService bookingService;
     private final JWTService jwtService;
     private final UserService userService;
 
@@ -93,5 +97,35 @@ public class HotelService {
         HotelEntity hotel = hotelRepository.findById(hotelId).orElseThrow(()-> new ResourceNotFoundException("Hotel with id:"+hotelId+" not found"));
         List<RoomDTO> roomDTOList = hotel.getRooms().stream().map(room->modelMapper.map(room, RoomDTO.class)).toList();
         return new HotelInfoDTO(modelMapper.map(hotel, HotelDTO.class),roomDTOList);
+    }
+
+    public List<HotelDTO> getAllHotels() {
+        UserEntity user = (UserEntity) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        List<HotelEntity> hotelEntityList = hotelRepository.findByOwnerId(user.getId());
+        return hotelEntityList.stream()
+                .map(hotelEntity -> modelMapper.map(hotelEntity, HotelDTO.class))
+                .toList();
+    }
+
+    public List<BookingDTO> getAllBookingsByHotelId(Long hotelId, BookingStatus status) {
+        UserEntity user = (UserEntity) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        HotelEntity hotel = hotelRepository.findById(hotelId).orElseThrow(() -> new ResourceNotFoundException("Hotel id not found"));
+        if (!hotel.getOwner().getId().equals(user.getId())){
+            throw new IllegalStateException("hotel owner id is not same as logged in user id");
+        }
+        return bookingService.getAllBookingsByHotelId(hotelId,status);
+    }
+
+    public HotelReportDTO getHotelReports(Long hotelId, LocalDate startDate, LocalDate endDate) {
+        UserEntity user = (UserEntity) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        HotelEntity hotel = hotelRepository.findById(hotelId).orElseThrow(() -> new ResourceNotFoundException("Hotel id not found"));
+        if (!hotel.getOwner().getId().equals(user.getId())){
+            throw new IllegalStateException("hotel owner id is not same as logged in user id");
+        }
+        LocalDateTime startDateTime = startDate.atStartOfDay();
+        LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
+
+        return bookingService.getHotelReports(hotelId,startDateTime,endDateTime);
+        
     }
 }

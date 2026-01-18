@@ -1,5 +1,6 @@
 package com.SpringBoot.Sanjyot.AirbnbClone.entities;
 
+import com.SpringBoot.Sanjyot.AirbnbClone.entities.enums.Gender;
 import com.SpringBoot.Sanjyot.AirbnbClone.entities.enums.Roles;
 import jakarta.persistence.*;
 import lombok.*;
@@ -7,6 +8,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
@@ -33,6 +35,11 @@ public class UserEntity implements UserDetails {
     private String password;
 
     private String name;
+
+    private LocalDate date0fBirth;
+
+    @Enumerated(EnumType.STRING)
+    private Gender gender;
 
     @ElementCollection(fetch = FetchType.EAGER)
     @Enumerated(EnumType.STRING)

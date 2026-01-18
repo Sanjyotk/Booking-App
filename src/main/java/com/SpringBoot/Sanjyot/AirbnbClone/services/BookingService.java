@@ -15,6 +15,8 @@ import com.stripe.model.Refund;
 import com.stripe.model.checkout.Session;
 import com.stripe.param.RefundCancelParams;
 import com.stripe.param.RefundCreateParams;
+import org.jspecify.annotations.Nullable;
+import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,11 +25,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -367,5 +368,85 @@ public class BookingService {
         } catch (StripeException e) {
             throw new RuntimeException("Refund failed", e);
         }
+    }
+
+    public List<BookingDTO> getAllBookingsByHotelId(Long hotelId, BookingStatus status) {
+        if (status == null) {
+            return bookingRepository.findByHotelId(hotelId)
+                    .stream()
+                    .map(booking -> modelMapper.map(booking, BookingDTO.class))
+                    .toList();
+        }
+        return bookingRepository.findByHotelId(hotelId)
+                .stream()
+                .filter(booking -> booking.getBookingStatus() == status)
+                .map(booking -> modelMapper.map(booking, BookingDTO.class))
+                .toList();
+    }
+
+    public HotelReportDTO getHotelReports(Long hotelId,LocalDateTime startDateTime, LocalDateTime endDateTime) {
+
+        List<BookingEntity> bookings = bookingRepository.findByHotelIdAndCreatedAtBetween(hotelId, startDateTime, endDateTime);
+
+        Map<BookingStatus, HotelStatusReportDTO> report =
+                Arrays.stream(BookingStatus.values())
+                        .collect(Collectors.toMap(
+                                status -> status,
+                                status -> buildStatusReport(
+                                        bookings.stream()
+                                                .filter(b -> b.getBookingStatus() == status)
+                                                .toList()
+                                )
+                        ));
+
+        return HotelReportDTO.builder()
+                .statusWiseReport(report)
+                .build();
+    }
+
+    private HotelStatusReportDTO buildStatusReport(List<BookingEntity> bookings) {
+
+        long bookingCount = bookings.size();
+
+        BigDecimal totalRevenue = bookings.stream()
+                .map(BookingEntity::getTotalPrice)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal avgRevenue = bookingCount == 0
+                ? BigDecimal.ZERO
+                : totalRevenue.divide(
+                BigDecimal.valueOf(bookingCount),
+                2,
+                RoundingMode.HALF_UP
+        );
+
+        long totalRoomsBooked = bookings.stream()
+                .mapToLong(b -> b.getRoomsCount() == null ? 0 : b.getRoomsCount())
+                .sum();
+
+        BigDecimal avgRoomsPerBooking = bookingCount == 0
+                ? BigDecimal.ZERO
+                : BigDecimal.valueOf(totalRoomsBooked)
+                .divide(
+                        BigDecimal.valueOf(bookingCount),
+                        2,
+                        RoundingMode.HALF_UP
+                );
+
+        return HotelStatusReportDTO.builder()
+                .bookingCount(bookingCount)
+                .totalRevenue(totalRevenue)
+                .avgRevenue(avgRevenue)
+                .totalRoomsBooked(totalRoomsBooked)
+                .avgRoomsPerBooking(avgRoomsPerBooking)
+                .build();
+    }
+
+    public List<BookingDTO> getMyBookings() {
+        UserEntity user = (UserEntity) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        List<BookingEntity> userBookings = bookingRepository.findByUserId(user.getId());
+
+        return userBookings.stream().map(booking -> modelMapper.map(booking,BookingDTO.class)).toList();
     }
 }

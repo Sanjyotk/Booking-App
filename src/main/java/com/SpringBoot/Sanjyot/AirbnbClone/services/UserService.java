@@ -1,8 +1,10 @@
 package com.SpringBoot.Sanjyot.AirbnbClone.services;
 
+import com.SpringBoot.Sanjyot.AirbnbClone.dto.ProfileUpdateRequestDTO;
 import com.SpringBoot.Sanjyot.AirbnbClone.entities.UserEntity;
 import com.SpringBoot.Sanjyot.AirbnbClone.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import lombok.RequiredArgsConstructor;
@@ -35,5 +37,15 @@ public class UserService implements UserDetailsService {
 
     public UserEntity save(UserEntity newUser) {
         return userRepository.save(newUser);
+    }
+
+    public void updateProfile(ProfileUpdateRequestDTO profileUpdateRequestDto) {
+        UserEntity user = (UserEntity) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+
+        if(profileUpdateRequestDto.getDate0fBirth() != null) user.setDate0fBirth(profileUpdateRequestDto.getDate0fBirth());
+        if(profileUpdateRequestDto.getGender() != null) user.setGender(profileUpdateRequestDto.getGender());
+        if (profileUpdateRequestDto.getName() != null) user.setName(profileUpdateRequestDto.getName());
+
+        userRepository.save(user);
     }
 }
