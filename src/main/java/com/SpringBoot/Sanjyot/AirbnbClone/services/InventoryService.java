@@ -1,6 +1,5 @@
 package com.SpringBoot.Sanjyot.AirbnbClone.services;
 
-import com.SpringBoot.Sanjyot.AirbnbClone.dto.HotelDTO;
 import com.SpringBoot.Sanjyot.AirbnbClone.dto.HotelSearchRequestDTO;
 import com.SpringBoot.Sanjyot.AirbnbClone.dto.InventoryDTO;
 import com.SpringBoot.Sanjyot.AirbnbClone.dto.UpdateInventoryDTO;
@@ -9,13 +8,11 @@ import com.SpringBoot.Sanjyot.AirbnbClone.dto.pricing.PricingSnapshot;
 import com.SpringBoot.Sanjyot.AirbnbClone.dto.searchDtos.AvailableRoomDTO;
 import com.SpringBoot.Sanjyot.AirbnbClone.dto.searchDtos.AvailableRoomRow;
 import com.SpringBoot.Sanjyot.AirbnbClone.dto.searchDtos.HotelWithAvailableRoomsDTO;
-import com.SpringBoot.Sanjyot.AirbnbClone.entities.HotelEntity;
 import com.SpringBoot.Sanjyot.AirbnbClone.entities.Inventory;
 import com.SpringBoot.Sanjyot.AirbnbClone.entities.RoomEntity;
 import com.SpringBoot.Sanjyot.AirbnbClone.repositories.InventoryRepository;
 import com.SpringBoot.Sanjyot.AirbnbClone.strategy.PricingService;
 import lombok.RequiredArgsConstructor;
-import org.jspecify.annotations.Nullable;
 import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;

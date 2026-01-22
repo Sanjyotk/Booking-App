@@ -13,10 +13,7 @@ import com.stripe.exception.StripeException;
 import com.stripe.model.Event;
 import com.stripe.model.Refund;
 import com.stripe.model.checkout.Session;
-import com.stripe.param.RefundCancelParams;
 import com.stripe.param.RefundCreateParams;
-import org.jspecify.annotations.Nullable;
-import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +23,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
@@ -319,7 +317,7 @@ public class BookingService {
         );
     }
 
-//    @Transactional
+    @Transactional
     public String cancelBooking(Long bookingId) {
 
         UserEntity user = (UserEntity) SecurityContextHolder
@@ -338,10 +336,33 @@ public class BookingService {
             throw new IllegalStateException("Only confirmed bookings can be cancelled");
         }
 
+        long refundAmount = 0L;
+        LocalDate cancelDate = LocalDate.now();
+        long dateDifference = ChronoUnit.DAYS.between(cancelDate,booking.getCheckInDate());
+        if (dateDifference>=30){
+            refundAmount = booking.getTotalPrice().multiply(BigDecimal.valueOf(0.9)).longValueExact();
+        }
+        else if(dateDifference>=14){
+            refundAmount = booking.getTotalPrice().multiply(BigDecimal.valueOf(0.5)).longValueExact();
+        }
+        else if(dateDifference>=7){
+            refundAmount = booking.getTotalPrice().multiply(BigDecimal.valueOf(0.3)).longValueExact();
+        }
+        else if(dateDifference>=4){
+            refundAmount = booking.getTotalPrice().multiply(BigDecimal.valueOf(0.1)).longValueExact();
+        }
+        else if (dateDifference <= 0) {
+            throw new IllegalStateException("Check-in date already started or passed");
+        }
+        else {
+            throw new IllegalStateException("Cancellation not allowed within 4 days of check-in");
+        }
+
         try {
             RefundCreateParams refundParams =
                     RefundCreateParams.builder()
                             .setPaymentIntent(booking.getPaymentIntentId())
+                            .setAmount(refundAmount)
                             .build();
 
             log.warn("STEP 1: Entered cancelBooking");
